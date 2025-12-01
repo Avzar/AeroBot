@@ -5,57 +5,49 @@ import urllib3
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+urllib3.disable_warnings()
 
-# Токен берём из переменной окружения Render
 TOKEN = os.environ["BOT_TOKEN"]
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+HEADERS = {"User-Agent": "AeroBot/1.0 (+https://t.me/твой_бот)"}
 
-def get_weather(icao: str) -> str:
+def get_weather(icao):
     try:
-        url = f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&taf=true"
-        r = requests.get(url, headers=HEADERS, timeout=12)
-        return f"Погода {icao}\n\n{r.text.strip()}" if r.text.strip() else f"Погода для {icao} не найдена"
+        r = requests.get(f"https://aviationweather.gov/api/data/metar?ids={icao}&format=raw&taf=true", 
+                        headers=HEADERS, timeout=10)
+        return f"Погода {icao}\n\n{r.text.strip()}" if r.text.strip() else "Погода не найдена"
     except:
-        return f"Ошибка получения погоды для {icao}"
+        return "Ошибка погоды"
 
-def get_notam(icao: str) -> str:
+def get_notam(icao):
     try:
-        url = f"https://api.faa.gov/notams?locations={icao}&format=json"
-        r = requests.get(url, headers=HEADERS, timeout=15, verify=False)
+        r = requests.get(f"https://api.faa.gov/notams?locations={icao}&format=json",
+                        headers=HEADERS, timeout=12, verify=False)
         data = r.json()
         notams = data.get("notams", [])
         if not notams:
-            return f"Активных NOTAM для {icao} нет"
-        result = f"NOTAM {icao} ({len(notams)} шт.):\n\n"
-        for item in notams[:8]:
-            text = item.get("text", "—").replace("\n", " ")
-            result += f"• {text[:350]}...\n\n"
-        return result.strip()
+            return "Активных NOTAM нет"
+        res = f"NOTAM {icao} ({len(notams)} шт.):\n\n"
+        for n in notams[:7]:
+            res += "• " + n.get("text","").replace("\n"," ")[:350] + "...\n\n"
+        return res
     except:
         return "NOTAM временно недоступны"
 
 async def start(update: Update, context):
     await update.message.reply_text(
-        "Привет!\nЯ выдаю погоду (METAR/TAF) и NOTAM по ICAO-коду.\n\n"
-        "Просто напиши код аэропорта — получишь всё сразу!\n"
-        "Примеры: UAAA, UUWW, EGLL, OMDB"
+        "Привет!\nЯ выдаю METAR/TAF и NOTAMnПросто напиши ICAO (UAAA, EGLL, OMDB и т.д.)"
     )
 
-async def handle_message(update: Update, context):
+async def handle(update: Update, context):
     text = update.message.text.strip().upper()
-    if len(text) == 4 and text.isalpha():
+    if len(text)==4 and text.isalpha():
         await update.message.reply_text(get_weather(text) + "\n\n" + get_notam(text))
 
-def main():
-    app = Application.builder().token(TOKEN).build()
-    
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    print("Бот запущен в облаке!")
-    app.run_polling()
+app = Application.builder().token(TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 
-if __name__ == "__main__":
-    main()
+print("Бот запущен в облаке Render")
+app.run_polling()
+
